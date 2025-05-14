@@ -1,0 +1,167 @@
+/* Data step with infile statement */
+DATA MODELMWB;
+	INFILE "/home/u57408750/sasuser.v94/MHSurvSTAT430.csv"
+	DLM = ',' DSD MISSOVER FIRSTOBS = 2;
+	INPUT AGE GENDER $ SLEEP PHYSICAL CONNECT MEALS MWBEING;
+RUN;
+
+/* Sorting data by Gender */
+PROC SORT DATA = MODELMWB;
+	BY GENDER;
+RUN;
+
+/* Checking Frequency of Gender in data*/
+PROC FREQ DATA = MODELMWB;
+	TITLE 'Frequency Table of Data for Gender';
+	TABLES GENDER;
+RUN;
+
+/* Creating new data set to remove Other as there is not enough 
+   observations to properly represent the population */
+DATA MODELMWB2;
+	SET MODELMWB;
+	IF GENDER = "Female" OR GENDER = 'Male';
+RUN;
+
+/* Creating dummy variables for categorical variables of Gender */
+DATA MODELMWB2;
+	SET MODELMWB2;
+	IF GENDER = "Female" THEN G = 1; 
+	ELSE G = 0;
+RUN;
+
+/* Checking Frequency of Gender in data after removal of Other */
+PROC FREQ DATA = MODELMWB2;
+	TITLE 'Frequency Table of Data for Gender';
+	TABLES GENDER;
+RUN;
+
+/* Compute Summary Statistics and Visuals of fixed Data*/
+PROC UNIVARIATE DATA = MODELMWB2 PLOTS CIBASIC;
+	TITLE "Basic Statistics and Histogram of Survey Data for each Variable";
+	VAR AGE SLEEP PHYSICAL CONNECT MEALS MWBEING;
+	HISTOGRAM;
+	ODS SELECT All;
+RUN;
+
+/* Compute Summary Statistics and Visuals of fixed Data by Gender */
+PROC UNIVARIATE DATA = MODELMWB2 PLOTS CIBASIC;
+	TITLE "Basic Statistics and Histogram of Survey Data
+			by Gender for each Variable";
+	BY GENDER;
+	VAR AGE SLEEP PHYSICAL CONNECT MEALS MWBEING;
+	HISTOGRAM;
+	ODS SELECT All;
+RUN;
+
+/* Compute basic statistics of data based */
+PROC MEANS DATA = MODELMWB2 MEAN CLM MEDIAN MIN MAX STD;
+	TITLE "Summary of Basic Statistics and Histogram of Survey Data";
+	VAR AGE SLEEP PHYSICAL CONNECT MEALS MWBEING;
+RUN;
+
+/* Compute basic statistics of data based on Gender */
+PROC MEANS DATA = MODELMWB2 MEAN CLM MEDIAN MIN MAX STD ;
+	TITLE "Summary of Basic Statistics and Histogram of Survey Data by Gender";
+	BY GENDER;
+	VAR AGE SLEEP PHYSICAL CONNECT MEALS MWBEING;
+RUN;
+
+/* Creating Scatterplots between multiple variables in data */
+PROC SGSCATTER DATA = MODELMWB2;
+	TITLE 'Scatter Plot of Mental Wellbeing Factors';
+	MATRIX AGE SLEEP PHYSICAL CONNECT MEALS MWBEING;
+RUN;
+
+/* Creating Scatterplots between Mental Wellbeing and predictors by Gender*/
+PROC SGSCATTER DATA = MODELMWB2;
+	TITLE 'Scatter Plot of Mental Wellbeing Factors by Gender';
+	COMPARE Y = MWBEING X = (AGE SLEEP PHYSICAL CONNECT MEALS) / GROUP = GENDER;
+RUN;
+
+/* Correlation Matrix for Data */
+PROC CORR DATA = MODELMWB2;
+	TITLE 'Correlation Matrix of Mental Wellbeing Model';
+	VAR AGE SLEEP PHYSICAL CONNECT MEALS MWBEING;
+RUN;
+
+/* Creating data set with ID variable */
+DATA MODELMWB3;
+	SET MODELMWB2;
+	ID = _N_;
+RUN;
+
+/* Regression Statement giving Cook's D Statistic*/
+PROC REG DATA = MODELMWB3;
+	TITLE 'Linear Regression of Model using Cooks Distance';
+	MODEL MWBEING = CONNECT MEALS AGE PHYSICAL SLEEP/ R;
+RUN;
+
+/* Regression Statement giving Cook's D Statistic with Dummy
+   Variables for Gender*/
+PROC REG DATA = MODELMWB3;
+	TITLE 'Linear Regression of Model using Cooks Distance with Gender';
+	MODEL MWBEING = CONNECT MEALS AGE PHYSICAL SLEEP G/ R;
+RUN;
+
+/* Creating fixed data set to remove outliers from Cook's D, along
+   with ID 17 since that observation is one with an extreme amount of
+   time in physical, skewing that data immensely. */
+DATA MWBFIXED;
+	SET MODELMWB3;
+	IF ID = 2 OR ID = 8 OR ID = 17 OR ID = 22 OR ID = 25 OR ID = 26 THEN DELETE;
+RUN;
+
+/* Correlation Matrix for fixed Data */
+PROC CORR DATA = MWBFIXED;
+	TITLE 'Correlation Matrix of Mental Wellbeing Model';
+	VAR AGE SLEEP PHYSICAL CONNECT MEALS MWBEING G;
+RUN;
+
+/* Creating Scatterplots between Mental Wellbeing and predictors by Gender of Fixed Data */
+PROC SGSCATTER DATA = MWBFIXED;
+	TITLE 'Scatter Plot of Mental Wellbeing Factors by Gender';
+	COMPARE Y = MWBEING X = (AGE SLEEP PHYSICAL CONNECT MEALS) / GROUP = GENDER;
+RUN;
+
+/* Regression Statement to Maximize R Statistic with Dummy
+   Variables for Gender after removal of identified variables from Cook's D*/
+PROC REG DATA = MWBFIXED;
+	TITLE 'Regression Model of Mental Being to Maximize R-Squared';
+	MODEL MWBEING = CONNECT MEALS AGE PHYSICAL SLEEP G/ SELECTION = MAXR;
+RUN;
+
+/* Regression Statement to Maximize R Statistic with Dummy
+   Variables for Gender after removal of identified variables from Cook's D*/
+PROC REG DATA = MWBFIXED;
+	TITLE 'Regression Model of Mental Being to Maximize R-Squared';
+	MODEL MWBEING = CONNECT MEALS AGE PHYSICAL SLEEP/ SELECTION = MAXR;
+RUN;
+
+/* Regression Statement to Maximize R Statistic
+   after removal of identified variables from Cook's D */
+PROC REG DATA = MWBFIXED;
+	TITLE 'Regression Model of Mental Being to Maximize adjR-Squared';
+	MODEL MWBEING = CONNECT MEALS AGE PHYSICAL SLEEP/ ADJRSQ;
+RUN;
+
+/* Regression Statement moving Stepwise using fixed data */
+PROC REG DATA = MWBFIXED;
+	TITLE 'Regression Model of Mental Being moving Stepwise along variables';
+	MODEL MWBEING = CONNECT MEALS AGE PHYSICAL SLEEP/ SELECTION = STEPWISE;
+RUN;
+
+/* GLM Statement to make GLM Model of fixed data */
+PROC GLM DATA = MWBFIXED PLOTS = diagnostics plots=residuals;
+	TITLE 'General Linear Regression Model of Mental Being with all variables';
+	CLASS GENDER;
+	MODEL MWBEING = CONNECT MEALS AGE PHYSICAL SLEEP/ SOLUTION;
+RUN;
+
+/* GLM Statement to make GLM Model of fixed data with variables of best correlation */
+PROC GLM DATA = MODELMWB PLOTS = diagnostics plots=residuals;
+	TITLE 'General Linear Regression Model of Mental Being 
+				with variables of Best Correlation';
+	CLASS GENDER;
+	MODEL MWBEING = CONNECT SLEEP/ SOLUTION;
+RUN;
